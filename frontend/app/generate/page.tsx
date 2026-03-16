@@ -24,6 +24,9 @@ export default function GeneratePage() {
     const keywords = params.get('keywords') || '';
     const language = params.get('language');
     const pages = params.get('pages');
+    const contentType = params.get('contentType') as any || 'story';
+    const strictModeration = params.get('strictModeration') === 'true';
+
     // Use defaults if parameters are missing
     return {
       age: age ? Number(age) : 18,
@@ -31,7 +34,9 @@ export default function GeneratePage() {
       theme: theme || 'Technology',
       keywords: keywords || '',
       language: language || 'English',
-      pages: pages ? Number(pages) : 10
+      pages: pages ? Number(pages) : 10,
+      contentType,
+      strictModeration
     };
   }, [params]);
 

@@ -15,6 +15,24 @@ export function MagazineLayout({ content }: Props) {
   const conclusion = content?.conclusion || '';
   const images = content?.images || [];
 
+  let mainBodyLabel = 'Main Story';
+  let highlightsLabel = 'Characters';
+  let conclusionLabel = 'Moral & Wrap-up';
+
+  if (content?.content_type === 'poem') {
+    mainBodyLabel = 'Poem';
+    highlightsLabel = 'Themes & Imagery';
+    conclusionLabel = 'Meaning';
+  } else if (content?.content_type === 'article') {
+    mainBodyLabel = 'Article Body';
+    highlightsLabel = 'Key Highlights';
+    conclusionLabel = 'Summary';
+  } else if (content?.content_type === 'biography') {
+    mainBodyLabel = 'Biography';
+    highlightsLabel = 'Major Achievements';
+    conclusionLabel = 'Legacy';
+  }
+
   return (
     <div className="space-y-6" style={{ minHeight: '400px' }}>
       <GlassCard className="relative overflow-hidden bg-gradient-to-br from-white/10 via-white/5 to-brand-500/10">
@@ -30,7 +48,7 @@ export function MagazineLayout({ content }: Props) {
         {mainStory && (
           <section className="break-inside-avoid pb-6">
             <GlassCard className="h-full space-y-3">
-              <h2 className="text-xl font-semibold text-brand-100">Main Story</h2>
+              <h2 className="text-xl font-semibold text-brand-100">{mainBodyLabel}</h2>
               <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{mainStory}</p>
             </GlassCard>
           </section>
@@ -39,7 +57,7 @@ export function MagazineLayout({ content }: Props) {
         {characterHighlights && (
           <section className="break-inside-avoid pb-6">
             <GlassCard className="h-full space-y-3">
-              <h2 className="text-xl font-semibold text-brand-100">Characters</h2>
+              <h2 className="text-xl font-semibold text-brand-100">{highlightsLabel}</h2>
               <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{characterHighlights}</p>
             </GlassCard>
           </section>
@@ -48,7 +66,7 @@ export function MagazineLayout({ content }: Props) {
         {conclusion && (
           <section className="break-inside-avoid pb-6">
             <GlassCard className="h-full space-y-3">
-              <h2 className="text-xl font-semibold text-brand-100">Moral & Wrap-up</h2>
+              <h2 className="text-xl font-semibold text-brand-100">{conclusionLabel}</h2>
               <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{conclusion}</p>
             </GlassCard>
           </section>
@@ -60,10 +78,10 @@ export function MagazineLayout({ content }: Props) {
           {images.map((url, idx) => (
             <GlassCard key={`${url}-${idx}`} className="overflow-hidden p-0">
               <div className="relative aspect-[4/3] w-full">
-                <Image 
-                  src={url} 
-                  alt={`Generated art ${idx + 1}`} 
-                  fill 
+                <Image
+                  src={url}
+                  alt={`Generated art ${idx + 1}`}
+                  fill
                   className="object-cover"
                   unoptimized
                 />

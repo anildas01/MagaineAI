@@ -22,7 +22,7 @@ router.post('/moderate', requireAdmin, async (req, res) => {
   }
 });
 
-import { getAllUsers, updateUserStatus, getAllContent, permanentlyDeleteContent } from '../services/storage';
+import { getAllUsers, updateUserStatus, getAllContent, permanentlyDeleteContent, getAdminAnalytics } from '../services/storage';
 
 router.get('/users', requireAdmin, async (req, res) => {
   try {
@@ -63,6 +63,16 @@ router.delete('/content/:id', requireAdmin, async (req, res) => {
   } catch (err: any) {
     console.error('Error deleting content:', err);
     return res.status(500).json({ message: 'Failed to delete content: ' + err.message });
+  }
+});
+
+router.get('/analytics', requireAdmin, async (req, res) => {
+  try {
+    const stats = await getAdminAnalytics();
+    return res.json(stats);
+  } catch (err: any) {
+    console.error('Error fetching analytics:', err);
+    return res.status(500).json({ message: 'Failed to fetch analytics: ' + err.message });
   }
 });
 

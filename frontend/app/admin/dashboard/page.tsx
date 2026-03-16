@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ThemeToggle } from '../../../components/ThemeToggle';
 import { supabase } from '../../../lib/supabase';
-import { fetchContent, moderateContent, fetchUsers, updateUserStatus, fetchAllAdminContent, deleteAdminContent, fetchAdminFeedback, fetchFeedbackStats } from '../../../lib/api';
+import { fetchContent, moderateContent, fetchUsers, updateUserStatus, fetchAllAdminContent, deleteAdminContent, fetchAdminFeedback, fetchFeedbackStats, fetchAdminAnalytics } from '../../../lib/api';
 import type { GeneratedContent } from '../../../types';
 
 interface User {
@@ -26,6 +26,7 @@ export default function AdminDashboardPage() {
   const [contentList, setContentList] = useState<(GeneratedContent & { users: { name: string } | null })[]>([]);
   const [feedbackList, setFeedbackList] = useState<any[]>([]);
   const [feedbackStats, setFeedbackStats] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   // Content Review State
@@ -96,6 +97,15 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const loadAnalytics = async () => {
+    try {
+      const data = await fetchAdminAnalytics();
+      setAnalytics(data);
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
   const handleBlockUser = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'blocked' : 'active';
     if (!confirm(`Are you sure you want to ${newStatus} this user?`)) return;
@@ -120,6 +130,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (view === 'users' || view === 'overview') loadUsers();
     if (view === 'content' || view === 'overview') loadAllContent();
+    if (view === 'overview') loadAnalytics();
     if (view === 'feedback') loadFeedback();
   }, [view]);
 
@@ -398,6 +409,35 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Advanced Analytics */}
+                {analytics && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                    <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-2xl border border-border-light dark:border-border-dark shadow-sm">
+                      <div className="flex items-center gap-4">
+                        <div className="size-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-2xl">database</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-text-sec-light dark:text-text-sec-dark">Cache Hit Rate</p>
+                          <h4 className="text-2xl font-bold">{analytics.cacheHitRate?.toFixed(1) || 0}%</h4>
+                          <p className="text-xs text-text-sec-light dark:text-text-sec-dark mt-1">{analytics.cacheHits} / {analytics.totalGenerations} generations</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-2xl border border-border-light dark:border-border-dark shadow-sm">
+                      <div className="flex items-center gap-4">
+                        <div className="size-12 rounded-xl bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-2xl">payments</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-text-sec-light dark:text-text-sec-dark">Tokens Used Today</p>
+                          <h4 className="text-2xl font-bold">{analytics.totalTokensToday?.toLocaleString() || 0}</h4>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Content Moderation Queue */}
                 <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden">

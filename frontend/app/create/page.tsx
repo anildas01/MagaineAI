@@ -21,8 +21,17 @@ const initial: GenerationRequest = {
   theme: 'Space Exploration',
   keywords: '',
   language: 'English',
-  pages: 20
+  pages: 20,
+  contentType: 'story',
+  strictModeration: false
 };
+
+const contentTypes = [
+  { id: 'story', label: 'Story Magazine', icon: 'book' },
+  { id: 'poem', label: 'Poetry Collection', icon: 'history_edu' },
+  { id: 'article', label: 'Feature Article', icon: 'article' },
+  { id: 'biography', label: 'Biography', icon: 'person_book' }
+];
 
 const genres = [
   { id: 'Sci-Fi', icon: 'rocket_launch', label: 'Sci-Fi' },
@@ -95,7 +104,7 @@ export default function CreatePage() {
     init();
   }, [router]);
 
-  const update = (key: keyof GenerationRequest, value: string | number) => {
+  const update = (key: keyof GenerationRequest, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [key]: key === 'age' ? Number(value) : value }));
   };
 
@@ -126,7 +135,9 @@ export default function CreatePage() {
         theme: form.theme,
         keywords: keywords.join(', '),
         language: form.language,
-        pages: String(form.pages || 20)
+        pages: String(form.pages || 20),
+        contentType: form.contentType || 'story',
+        strictModeration: String(form.strictModeration || false)
       });
       router.push(`/generate?${params.toString()}`);
     }
@@ -197,6 +208,25 @@ export default function CreatePage() {
             {currentStep === 0 && (
               <div className="space-y-8">
                 <div>
+                  <label className="block text-sm font-bold mb-3">Format</label>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    {contentTypes.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => update('contentType', c.id)}
+                        className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${form.contentType === c.id
+                            ? 'border-primary bg-primary/5 text-primary font-bold shadow-lg ring-1 ring-primary'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-primary/50 text-gray-500'
+                          }`}
+                      >
+                        <span className="material-symbols-outlined text-2xl">{c.icon}</span>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-sm font-bold mb-3">Core Theme</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400">lightbulb</span>
@@ -247,11 +277,11 @@ export default function CreatePage() {
                         key={opt.val}
                         onClick={() => update('age', opt.val)}
                         className={`p-4 rounded-xl border-2 text-center transition-all ${(form.age < 13 && opt.val === 8) ||
-                            (form.age >= 13 && form.age < 18 && opt.val === 13) ||
-                            (form.age >= 18 && form.age < 21 && opt.val === 18) ||
-                            (form.age >= 21 && opt.val === 25)
-                            ? 'border-primary bg-primary/5 text-primary font-bold shadow-lg'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-primary/50 text-gray-600 dark:text-gray-300'
+                          (form.age >= 13 && form.age < 18 && opt.val === 13) ||
+                          (form.age >= 18 && form.age < 21 && opt.val === 18) ||
+                          (form.age >= 21 && opt.val === 25)
+                          ? 'border-primary bg-primary/5 text-primary font-bold shadow-lg'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary/50 text-gray-600 dark:text-gray-300'
                           }`}
                       >
                         {opt.label}
@@ -273,6 +303,19 @@ export default function CreatePage() {
                     </select>
                   </div>
                 </div>
+
+                <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="strictMod"
+                    checked={form.strictModeration}
+                    onChange={(e) => update('strictModeration', e.target.checked)}
+                    className="w-5 h-5 accent-primary rounded text-primary focus:ring-primary focus:ring-2 bg-white"
+                  />
+                  <label htmlFor="strictMod" className="font-bold cursor-pointer select-none">
+                    Enable Strict Family-Friendly Moderation
+                  </label>
+                </div>
               </div>
             )}
 
@@ -286,8 +329,8 @@ export default function CreatePage() {
                       key={g.id}
                       onClick={() => update('genre', g.id)}
                       className={`relative p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${form.genre === g.id
-                          ? 'border-primary bg-primary/5 text-primary shadow-lg ring-1 ring-primary'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-primary/50 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        ? 'border-primary bg-primary/5 text-primary shadow-lg ring-1 ring-primary'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-primary/50 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
                         }`}
                     >
                       <span className="material-symbols-outlined text-3xl">{g.icon}</span>
@@ -330,13 +373,15 @@ export default function CreatePage() {
                     Summary
                   </h3>
                   <p className="text-lg leading-relaxed">
-                    You are about to generate a <span className="font-bold text-primary">{form.genre}</span> magazine
+                    You are about to generate a <span className="font-bold text-primary">{form.genre}</span>{" "}
+                    <span className="font-bold text-primary capitalize">{form.contentType === 'story' ? 'magazine' : form.contentType}</span>{" "}
                     about <span className="font-bold text-primary">{form.theme}</span> for
                     <span className="font-bold text-primary"> {form.age < 13 ? 'Kids' : form.age < 18 ? 'Teens' : 'Adults'}</span>.
                     <br />
                     <span className="text-sm text-gray-500 mt-2 block">
                       Language: {form.language} • Length: {form.pages} pages
                       {keywords.length > 0 && ` • Keywords: ${keywords.join(', ')}`}
+                      {form.strictModeration && ' • Strict Moderation ON'}
                     </span>
                   </p>
                 </div>

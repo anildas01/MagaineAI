@@ -5,6 +5,8 @@ export type GenerationRequest = {
   keywords: string;
   language: string;
   pages?: number;
+  contentType?: 'story' | 'poem' | 'article' | 'biography';
+  strictModeration?: boolean;
 };
 
 export type GeneratedContent = {
@@ -12,7 +14,7 @@ export type GeneratedContent = {
   user_id?: string | null;
   title: string;
   introduction: string;
-  main_story: string; // Can store JSON string of MagazineStructure
+  main_story: string; // Can store JSON string of MagazineStructure or plain text for other types
   character_highlights: string;
   conclusion: string;
   image_urls: string[];
@@ -21,6 +23,9 @@ export type GeneratedContent = {
   type?: string;
   is_favorite?: boolean;
   deleted_at?: string | null;
+  content_type?: string;
+  prompt_hash?: string;
+  token_cost?: number;
 };
 
 export type MagazinePage = {

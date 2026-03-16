@@ -1,8 +1,20 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GenerationRequest, MagazinePage, MagazineStructure } from '../types';
 import { config } from '../config';
+import crypto from 'crypto';
+import { findCachedContent } from './storage';
 
-const unsafePatterns = [/violence/i, /hate/i, /nudity/i, /explicit/i];
+const baseUnsafePatterns = [/violence/i, /hate/i, /nudity/i, /explicit/i, /nsfw/i, /gore/i];
+const strictUnsafePatterns = [...baseUnsafePatterns, /weapon/i, /blood/i, /death/i, /kill/i, /murder/i, /swear/i];
+
+export function getUnsafePatterns(strict: boolean = false) {
+  return strict ? strictUnsafePatterns : baseUnsafePatterns;
+}
+
+export function generatePromptHash(input: GenerationRequest): string {
+  const norm = `${input.theme}|${input.genre}|${input.keywords}|${input.language}|${input.age}|${input.contentType || 'story'}|${input.strictModeration || false}`.toLowerCase().replace(/\s+/g, '');
+  return crypto.createHash('sha256').update(norm).digest('hex');
+}
 
 // Initialize Gemini AI client
 let genAI: GoogleGenerativeAI | null = null;
@@ -72,6 +84,31 @@ function planMagazine(input: GenerationRequest): MagazinePage[] {
 }
 
 export async function generateStory(input: GenerationRequest): Promise<any> {
+  const promptHash = generatePromptHash(input);
+  const cached = await findCachedContent(promptHash);
+
+  if (cached) {
+    console.log('Cache hit for prompt:', promptHash);
+    return {
+      title: cached.title,
+      introduction: cached.introduction,
+      main_story: cached.main_story,
+      character_highlights: cached.character_highlights,
+      conclusion: cached.conclusion,
+      images: cached.image_urls || [],
+      isCached: true,
+      tokenCost: 0,
+      promptHash
+    };
+  }
+
+  const isStrict = input.strictModeration || input.age < 13;
+  const currentUnsafePatterns = getUnsafePatterns(isStrict);
+  const combinedInput = `${input.theme} ${input.genre} ${input.keywords}`;
+  if (currentUnsafePatterns.some(p => p.test(combinedInput))) {
+    throw new Error('Content rejected by pre-generation safety filters.');
+  }
+
   const genAI = getGenAI();
   const model = genAI.getGenerativeModel({ model: 'models/gemini-2.5-flash' });
 
@@ -90,7 +127,25 @@ export async function generateStory(input: GenerationRequest): Promise<any> {
   const chapterSlots = pages.filter(p => p.type === 'CHAPTER');
   const approxWords = chapterSlots.length * 500; // Target total length
 
-  const contentPrompt = `You are the Editor-in-Chief. Write the FULL text content for a magazine about "${input.theme}" in ${input.language || 'English'}.
+  let persona = "Editor-in-Chief";
+  let contentInstructions = "Write the FULL text content for a magazine about";
+  let chapterInstructions = "Generate distinct chapters. Write each chapter as ONE CONTINUOUS BLOCK of text.";
+
+  if (input.contentType === 'poem') {
+    persona = "Master Poet";
+    contentInstructions = "Write a beautiful, structured poem about";
+    chapterInstructions = "Generate distinctly themed long stanzas. Ensure a poetic rhythm and rhyme scheme.";
+  } else if (input.contentType === 'article') {
+    persona = "Expert Journalist";
+    contentInstructions = "Write a highly detailed, factual, and engaging article about";
+    chapterInstructions = "Generate distinct sub-sections covering different angles of the topic.";
+  } else if (input.contentType === 'biography') {
+    persona = "Historian and Biographer";
+    contentInstructions = "Write a structured biography or historical account of";
+    chapterInstructions = "Generate chronological chapters (e.g., Early Life, Major Achievements, Legacy).";
+  }
+
+  const contentPrompt = `You are a ${persona}. ${contentInstructions} "${input.theme}" in ${input.language || 'English'}.
     
     Audience: ${input.age} years old. Genre: ${input.genre}. Keywords: ${input.keywords}.
     
@@ -98,8 +153,8 @@ export async function generateStory(input: GenerationRequest): Promise<any> {
     - Cover: Catchy tagline.
     - Editor's Note: Welcoming, 2-3 paragraphs.
     - Introduction: Deep dive, MAX 245 WORDS. Must fit on one page. Do NOT split.
-    - Chapters: Generate ${Math.max(2, Math.ceil(chapterSlots.length / 1.5))} distinct chapters.
-      * CRITICAL: Write each chapter as ONE CONTINUOUS BLOCK of text. 
+    - Chapters: Generate ${Math.max(2, Math.ceil(chapterSlots.length / 1.5))} sections.
+      * CRITICAL: ${chapterInstructions} 
       * Do NOT split chapters into pages yourself. 
       * Each chapter should be long and detailed (no upper limit).
       * Do NOT summarize. Fill the content.
@@ -111,8 +166,7 @@ export async function generateStory(input: GenerationRequest): Promise<any> {
       "editors_note": { "title": "...", "content": "..." },
       "introduction": { "title": "...", "content": "...", "image_prompt": "..." },
       "chapters": [
-        { "title": "...", "content": "FULL CONTINUOUS TEXT...", "image_prompt": "..." },
-        ...
+        { "title": "...", "content": "FULL CONTINUOUS TEXT...", "image_prompt": "..." }
       ],
       "summary": { "title": "...", "content": "..." }
     }
@@ -282,7 +336,11 @@ export async function generateStory(input: GenerationRequest): Promise<any> {
     main_story: JSON.stringify(magazine),
     character_highlights: sum?.content || "",
     conclusion: "End",
-    images: magazine.pages.map(p => p.image || "")
+    images: magazine.pages.map(p => p.image || ""),
+    isCached: false,
+    promptHash: promptHash,
+    // Calculate approximate token cost: ~1 token per 4 chars of generated text + setup overhead
+    tokenCost: Math.floor(JSON.stringify(magazine).length / 4) + 150
   };
 }
 
@@ -292,13 +350,13 @@ export async function generateImages(input: GenerationRequest) {
   return [];
 }
 
-export function isUnsafe(text: string) {
-  return unsafePatterns.some((pattern) => pattern.test(text));
+export function isUnsafe(text: string, strict: boolean = false) {
+  return getUnsafePatterns(strict).some((pattern) => pattern.test(text));
 }
 
-export async function moderateOutput(sections: Record<string, string>, retries = 2) {
+export async function moderateOutput(sections: Record<string, string>, retries = 2, strict = false) {
   // Simplified moderation for the new structure
-  const unsafe = Object.values(sections).some((s) => isUnsafe(s || ''));
+  const unsafe = Object.values(sections).some((s) => isUnsafe(s || '', strict));
   if (unsafe) throw new Error('Content rejected. Please revise your inputs.');
   return sections;
 }

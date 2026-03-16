@@ -23,7 +23,7 @@ export async function verifySupabaseToken(token: string) {
   return user;
 }
 
-export async function savePreference(userId: string | null, input: GenerationRequest & { gender?: string; interests?: string[] }) {
+export async function savePreference(userId: string | null, input: GenerationRequest & { gender?: string; interests?: string[]; preferred_content_types?: string[]; strict_moderation_enabled?: boolean }) {
   const client = getClient();
   // Check if preference exists for user to update or insert? 
   // Requirement says "Store ... in existing preferences table".
@@ -44,7 +44,9 @@ export async function savePreference(userId: string | null, input: GenerationReq
     genre: input.genre,
     theme: input.theme,
     keywords: input.keywords,
-    language: input.language
+    language: input.language,
+    preferred_content_types: input.preferred_content_types,
+    strict_moderation_enabled: input.strict_moderation_enabled
   });
 }
 
@@ -60,6 +62,50 @@ export async function getUserPreferences(userId: string) {
 
   if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "Row not found" (single)
   return data;
+}
+
+export async function checkUserTokens(userId: string): Promise<{ remaining: number, resetNeeded: boolean }> {
+  const client = getClient();
+  const { data, error } = await client.from('users').select('daily_token_quota, tokens_used_today, last_token_reset').eq('id', userId).single();
+  if (error) throw error;
+
+  // Basic check for reset needed
+  const lastReset = data.last_token_reset ? new Date(data.last_token_reset) : new Date(0);
+  const now = new Date();
+  const resetNeeded = (now.getTime() - lastReset.getTime()) > 24 * 60 * 60 * 1000;
+
+  const remaining = resetNeeded ? data.daily_token_quota : (data.daily_token_quota - data.tokens_used_today);
+  return { remaining, resetNeeded };
+}
+
+export async function updateUserTokens(userId: string, tokensUsed: number, resetNeeded: boolean) {
+  const client = getClient();
+  if (resetNeeded) {
+    await client.from('users').update({
+      tokens_used_today: tokensUsed,
+      last_token_reset: new Date().toISOString()
+    }).eq('id', userId);
+  } else {
+    // Increment tokens used
+    const { data: user } = await client.from('users').select('tokens_used_today').eq('id', userId).single();
+    if (user) {
+      await client.from('users').update({
+        tokens_used_today: user.tokens_used_today + tokensUsed
+      }).eq('id', userId);
+    }
+  }
+}
+
+export async function findCachedContent(promptHash: string) {
+  const client = getClient();
+  const { data, error } = await client.from('generated_content')
+    .select('*')
+    .eq('prompt_hash', promptHash)
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data as GeneratedContent | null;
 }
 
 export async function saveGeneratedContent(
@@ -356,4 +402,27 @@ export async function getOrCreateShadowUser(adminId: string) {
 
   if (createError) throw createError;
   return newUser.id;
+}
+
+export async function getAdminAnalytics() {
+  const client = getClient();
+
+  // 1. Token usage
+  const { data: users, error: uErr } = await client.from('users').select('tokens_used_today');
+  if (uErr) throw new Error(uErr.message);
+  const totalTokensToday = (users || []).reduce((acc, u) => acc + (u.tokens_used_today || 0), 0);
+
+  // 2. Cache hit rates
+  const { data: content, error: cErr } = await client.from('generated_content').select('prompt_hash, token_cost');
+  if (cErr) throw new Error(cErr.message);
+
+  let totalGenerations = content ? content.length : 0;
+  let cacheHits = content ? content.filter(c => c.token_cost === 0 && c.prompt_hash).length : 0;
+
+  return {
+    totalTokensToday,
+    totalGenerations,
+    cacheHits,
+    cacheHitRate: totalGenerations > 0 ? (cacheHits / totalGenerations) * 100 : 0
+  };
 }

@@ -5,6 +5,8 @@ export interface GenerationRequest {
     keywords: string | string[]; // Allow both for flexibility in form handling
     language: string;
     pages?: number;
+    contentType?: 'story' | 'poem' | 'article' | 'biography';
+    strictModeration?: boolean;
 }
 
 export interface GeneratedContent {
@@ -24,6 +26,9 @@ export interface GeneratedContent {
     created_at: string;
     is_favorite?: boolean;
     deleted_at?: string | null;
+    content_type?: string;
+    prompt_hash?: string;
+    token_cost?: number;
 }
 
 export interface FeedbackPayload {
