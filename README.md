@@ -55,4 +55,3 @@ npm run dev
 - AI calls are stubbed behind `services/ai.ts`; wire to Gemini/Imagen SDKs or REST APIs.
 - Moderation retries up to two times; rejects unsafe content with a clear error.
 - Glassmorphism theme uses the primary brand color defined in `tailwind.config.ts`.
-
